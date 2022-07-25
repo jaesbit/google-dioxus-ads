@@ -1,0 +1,76 @@
+<script async src='https://securepubads.g.doubleclick.net/tag/js/gpt.js'></script>
+<script>
+    let debug = false;
+    if (!debug) {
+        console.debug = function () {};
+    }
+
+    window.googletag = window.googletag || {cmd: []};
+    window.dgoogleads = window.dgoogleads || {
+        slots: []
+    };
+
+    dgoogleads.push = function(slot) {
+        console.debug("dgoogleads.push", slot);
+        googletag.cmd.push(function() {
+            // noinspection JSUnresolvedFunction,JSUnresolvedVariable
+            googletag.defineSlot(slot.path, slot.sizes, slot.id).addService(googletag.pubads());
+            // noinspection JSUnresolvedFunction
+            googletag.pubads().enableSingleRequest();
+            // noinspection JSUnresolvedFunction
+            googletag.enableServices();
+        });
+        dgoogleads.slots.push(slot);
+    };
+
+    dgoogleads.onload = function() {
+        console.debug("dgoogleads.onload");
+        googletag.cmd.push(function() {
+            for (let i = 0; i < dgoogleads.slots.length; i++) {
+                googletag.display(dgoogleads.slots[i].id);
+            }
+        });
+        setTimeout(function() {
+            console.debug("dgoogleads.onload.timeout");
+            dgoogleads.slots.forEach(function(slot) {
+                hook_id(slot.id);
+            });
+        }, 1000);
+    };
+
+    function hook_id(div_id) {
+        let parent_div = document.getElementById(div_id);
+        if (!parent_div){
+            throw new Error("Could not find div with id " + div_id);
+        }
+
+        const iframes = [...parent_div.getElementsByTagName("iframe")].filter(x=> x.name && x.name.includes("google_ads_iframe") );
+        if (!iframes.length){
+            throw new Error("No ads frame found");
+        }
+        let ad_links = iframes[0].contentWindow.document.getElementsByTagName("a");
+        if (!ad_links.length){
+            throw new Error("No links on ads iframe");
+        }
+        let ads_link = ad_links[0];
+        let org_click = ads_link.onclick;
+
+        const div_to_export = `ads_link_target-${div_id}`;
+        const forwarder_tag = document.getElementById(div_to_export);
+
+        ads_link.onclick = (eventData) => {
+            console.debug(`dioxus-google-ads.onclick id: ${div_id}, link: ${ads_link.href}`);
+
+            forwarder_tag.value = ads_link.href;
+            forwarder_tag.dispatchEvent(new Event("input", {bubbles:true}));
+
+            org_click(eventData);
+        };
+        console.debug(iframes);
+    }
+
+    window.hook_id = window.hook_id || hook_id;
+    window.onload = () => {
+        setTimeout(dgoogleads.onload, 500);
+    }
+</script>
